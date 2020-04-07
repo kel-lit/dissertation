@@ -1,4 +1,4 @@
-unsigned long buffToInt(byte * bytes) {
+unsigned long buffToULong(byte * bytes) {
 
 	unsigned long secret = long((unsigned long)(bytes[0]) << 24 |
 								(unsigned long)(bytes[1]) << 16 |
@@ -18,7 +18,7 @@ unsigned long generate_secret() {
 	bytes[2] = getTrueRotateRandomByte();
 	bytes[3] = getTrueRotateRandomByte();
 
-	unsigned long secret = buffToInt(bytes);
+	unsigned long secret = buffToULong(bytes);
 
 	char buffer[80];
 	sprintf(buffer, "Shared secret is: %lu", secret);

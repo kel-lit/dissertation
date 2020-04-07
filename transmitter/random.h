@@ -1,6 +1,7 @@
 /*Code taken from 
 https://gist.githubusercontent.com/bloc97/b5831977ccfeae3aa71976686c9c8afa/raw/20a7b33ef983274e4171094c1e7e8c5d4f30894d/Method1.ino
-and modified slightly
+and modified slightly.
+Originally created by bloc97 on GitHub: 
 */
 
 const int waitTime = 16;
