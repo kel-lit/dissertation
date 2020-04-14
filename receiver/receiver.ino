@@ -11,6 +11,8 @@ ulong incoming;
 int button = 3;
 int leds[3] = {6,4,5};
 
+int Delay = 130; //Milliseconds
+
 ulong secret;
 
 ulong listen_for_secret() {
@@ -20,9 +22,7 @@ ulong listen_for_secret() {
 
 	while (!radio.available());
 	radio.read(&secret, sizeof(secret));
-	char buffer[80];
-	sprintf(buffer, "Secret recieved: %lu", secret);
-	Serial.println(buffer);
+	Serial.print("Secret recieved: "); Serial.println(secret);
 
 	if (secret){
 		radio.stopListening();
@@ -53,32 +53,33 @@ void setup() {
 
 void loop() {
 
-	delay(2000);
+	delay(Delay);
 	radio.startListening();
 
-	byte command;
-	byte potential;
-	uint challenge;
+	byte command = 0;
+	byte potential = 0;
+	uint challenge = 0;
 
 	if (radio.available()) {
 		//while (radio.available()) {
 		radio.read(&incoming, sizeof(incoming));
 		incoming ^= secret;
-		Serial.print("Recieving: "); Serial.println(incoming);
+		// Serial.print("Recieving: "); Serial.println(incoming);
 
-		potential = (byte)incoming;
-		command = (byte)incoming >> 8; 
-		challenge = (uint)incoming >> 16;
+		potential = (ulong)incoming;
+		command = (ulong)incoming >> 8; 
+		challenge = (ulong)incoming >> 16;
 
-		Serial.println(challenge);
+		// Serial.print("Challenge: "); Serial.println(challenge);
 		ulong response = solve_challenge(challenge);
+		// Serial.print("response: "); Serial.println(response);
 
-		Serial.print("Sending: "); Serial.println(response ^ secret);
+		// Serial.print("Sending: "); Serial.println(response ^ secret);
+		delay(Delay);
 		send_ack(response ^ secret);
 		
-		//mutate_secret(&response, &secret);
-
-		
+		mutate_secret(&response, &secret);
+		Serial.print("New Secret: "); Serial.println(secret);
 
 		for (byte i=0; i < sizeof(leds); i++){
 			if (command - 1 == i){
@@ -90,11 +91,14 @@ void loop() {
 		}
 		//}
 	}
-
-	delay(2000);
-	radio.stopListening();
+	
 	int value = digitalRead(button);
-	radio.write(&value, sizeof(value));
+	if (value) {
+		delay(Delay);
+		radio.stopListening();
+		int value = digitalRead(button);
+		radio.write(&value, sizeof(value));
+	}
 }
 
 ulong solve_challenge(uint challenge) {
@@ -127,6 +131,5 @@ void send_ack(ulong ack) {
 void mutate_secret(ulong* modifier, ulong* secret ) {
 
 	*secret ^= *modifier;
-
 	return;
 }

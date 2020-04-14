@@ -19,9 +19,12 @@ int button2 = 3;
 int led = 4;
 //reset
 int reset = 10;
-// Secret
+// Outer vars
+int Delay = 130;
 ulong secret;
 ulong last_secret;
+byte responded = 0;
+uint challenge;
 
 int setup_radio(ulong secret) {
 	//Sends secret and waits for acknowledgement from reciever.
@@ -73,20 +76,22 @@ void setup() {
 
 void loop() {
 
-	delay(2000);
+	delay(Delay);
 	radio.stopListening();
 
 	byte command;
-	byte potential;	
-	uint challenge = 0;
+	byte potential;
 	ulong payload = 0;
 
 	get_command(&command, &potential); //Get control inputs
 	
-	challenge = generate_challenge();
+	if (responded){
+		challenge = generate_challenge();
+	}
 	payload = create_payload(command, potential, challenge);
-	Serial.print("Sending: "); Serial.println(payload);
+	// Serial.print("Sending: "); Serial.println(payload);
 	payload ^= secret; // Crude 'encryption' for proof-of-concept
+	// Serial.print("Challenge: "); Serial.println(challenge);
 
 	radio.write(&payload, sizeof(payload));
 	//Calculate expected challenge response
@@ -94,18 +99,26 @@ void loop() {
 	ulong incoming;
 
 	expected_response = solve_challenge(challenge);
-	delay(2000);
+	//Listen for acknowledgement
+	delay(Delay);
 	radio.startListening();
+
 	while(!radio.available());
 	radio.read(&incoming, sizeof(incoming));
-	Serial.print("Recieving: "); Serial.println(incoming);
-
+	// Serial.print("Response: "); Serial.print(incoming ^ secret);
+	// Serial.print(" | ExpectedResponse: "); Serial.println(expected_response);
+	// Serial.print("Recieving: "); Serial.println(incoming);
+	//If recieved challenge response matches expected 
 	if (incoming ^ secret == expected_response){
+		//Mutate the current secret
 		last_secret = secret;
-		Serial.println(incoming);
+		mutate_secret(&expected_response, &secret);
+		responded = 1;
+		Serial.print("Challenge passed, New secret: "); Serial.println(secret);
 	}
 	else {
 		//It might be a command
+		responded = 0;
 
 	}
 }
@@ -126,8 +139,8 @@ uint generate_challenge() {
 
 	uint challenge = 0;
 
-	challenge += (byte)getTrueRotateRandomByte();
-	challenge += (byte)getTrueRotateRandomByte() << 8;
+	challenge += (uint)getTrueRotateRandomByte();
+	challenge += (uint)getTrueRotateRandomByte() << 8;
 
 	return challenge;
 }
@@ -162,8 +175,6 @@ ulong create_payload(byte command, byte potential, uint challenge) {
 
 void mutate_secret(ulong* modifier, ulong* secret ) {
 
-	
 	*secret ^= *modifier;
-
 	return;
 }
