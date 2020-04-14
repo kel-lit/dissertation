@@ -70,7 +70,7 @@ void setup() {
 		Serial.println("Secret sharing was successful");
 	}
 	else {
-		digitalWrite(reset, LOW);// Reset arduino
+		// digitalWrite(reset, LOW);// Reset arduino
 	}
 }
 

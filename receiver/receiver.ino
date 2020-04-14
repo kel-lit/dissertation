@@ -61,20 +61,15 @@ void loop() {
 	uint challenge = 0;
 
 	if (radio.available()) {
-		//while (radio.available()) {
 		radio.read(&incoming, sizeof(incoming));
 		incoming ^= secret;
-		// Serial.print("Recieving: "); Serial.println(incoming);
 
 		potential = (ulong)incoming;
 		command = (ulong)incoming >> 8; 
 		challenge = (ulong)incoming >> 16;
 
-		// Serial.print("Challenge: "); Serial.println(challenge);
 		ulong response = solve_challenge(challenge);
-		// Serial.print("response: "); Serial.println(response);
-
-		// Serial.print("Sending: "); Serial.println(response ^ secret);
+		
 		delay(Delay);
 		send_ack(response ^ secret);
 		
@@ -89,7 +84,6 @@ void loop() {
 				digitalWrite(leds[i], 0);
 			}
 		}
-		//}
 	}
 	
 	int value = digitalRead(button);
