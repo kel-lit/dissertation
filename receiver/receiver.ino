@@ -1,17 +1,17 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include "cipher.h"
 
 typedef unsigned long ulong;
 typedef unsigned int uint;
 
 RF24 radio(7, 8); // CE, CSN
 const byte addresses[][6] = {"00001", "00002"};
-ulong incoming;
-int button = 3;
+
 int leds[3] = {6,4,5};
 
-int Delay = 130; //Milliseconds
+int Delay = 40; //Milliseconds
 
 ulong secret;
 
@@ -40,15 +40,11 @@ void setup() {
 	radio.openReadingPipe(1, addresses[1]); // 00002
 	radio.setPALevel(RF24_PA_MIN);
 
-	pinMode(2, OUTPUT);
-	digitalWrite(2, HIGH);
-		
-	pinMode(button, INPUT);
 	for (int i; i < sizeof(leds); i++){
 		pinMode(leds[i], OUTPUT);
 	}
 
-	unsigned long secret = listen_for_secret();
+	ulong secret = listen_for_secret();
 }
 
 void loop() {
@@ -56,46 +52,74 @@ void loop() {
 	delay(Delay);
 	radio.startListening();
 
-	byte command = 0;
-	byte potential = 0;
-	uint challenge = 0;
+	byte command;
+	byte potential;
+	byte payload[5];
+	byte checksum;
+	uint challenge;
 
 	if (radio.available()) {
-		radio.read(&incoming, sizeof(incoming));
-		incoming ^= secret;
-
-		potential = (ulong)incoming;
-		command = (ulong)incoming >> 8; 
-		challenge = (ulong)incoming >> 16;
-
-		ulong response = solve_challenge(challenge);
+		radio.read(&payload, sizeof(payload));
 		
-		delay(Delay);
-		send_ack(response ^ secret);
-		
-		mutate_secret(&response, &secret);
-		Serial.print("New Secret: "); Serial.println(secret);
+		checksum = payload[4];
+		decrypt(payload, secret);
 
-		for (byte i=0; i < sizeof(leds); i++){
-			if (command - 1 == i){
-				digitalWrite(leds[i], potential);
+		if (verify_checksum(payload, checksum)) {
+			command = payload[0];
+			potential = payload[1];
+			challenge = payload[2]; challenge += (uint)(payload[3] << 8);
+
+			byte response[4];
+			solve_challenge(response, challenge);
+
+			byte res_copy[4];
+			for (int i=0; i < sizeof(response); i++){
+				res_copy[i] = response[i];
 			}
-			else{
-				digitalWrite(leds[i], 0);
-			}
+			
+			encrypt(response, secret);
+			
+			radio.stopListening();
+			radio.write(&response, sizeof(response));
+			radio.startListening();
+
+			execute_command(command, potential);
+
+			mutate_secret(res_copy, &secret);
+			Serial.print("New Secret: "); Serial.println(secret);
+		}
+		else {
+			Serial.println("Checksum failed");
 		}
 	}
-	
-	int value = digitalRead(button);
-	if (value) {
-		delay(Delay);
-		radio.stopListening();
-		int value = digitalRead(button);
-		radio.write(&value, sizeof(value));
+	delay(Delay);
+}
+
+bool verify_checksum(byte *payload, byte checksum) {
+
+	byte exp_checksum = get_checksum(payload);
+
+	if (exp_checksum == checksum) {
+		return true;
+	}
+	else {
+		return false;
 	}
 }
 
-ulong solve_challenge(uint challenge) {
+byte get_checksum(byte *payload) {
+
+	byte checksum = 0;
+
+	for (int i=0; i < 4; i++) { // -1 to miss the checksum in payload
+		checksum += payload[i] % 255;
+	}
+
+	return checksum;
+}
+
+
+void solve_challenge(byte *response_arr, uint challenge) {
 	
 	ulong prime = 16777619; //recommended prime and seed from: http://isthe.com/chongo/tech/comp/fnv/
 	ulong seed = 2166136261;
@@ -110,20 +134,30 @@ ulong solve_challenge(uint challenge) {
 	response += (high ^ seed) * prime << 16;
 	response += (low ^ seed) * prime << 24;
 
-	return response;
-}
+	for (int i=0; i < 4; i++) response_arr[i] = (byte)(response >> i*8);
 
-void send_ack(ulong ack) {
-
-	radio.stopListening();
-	radio.write(&ack, sizeof(ack));
-	radio.startListening();
-	
 	return;
 }
 
-void mutate_secret(ulong* modifier, ulong* secret ) {
+void execute_command(byte command, byte potential) { 
+	//Controls receiver LEDs based on command input
+	for (byte i=0; i < sizeof(leds); i++){
+		if (command - 1 == i){
+			digitalWrite(leds[i], potential);
+		}
+		else{
+			digitalWrite(leds[i], 0);
+		}
+	}
 
-	*secret ^= *modifier;
+	return;
+}
+
+void mutate_secret(byte *modifier_arr, ulong* secret ) {
+
+	ulong modifier;
+	for (int i=0; i < 4; i++) modifier += (ulong)modifier_arr[i] << i*8;
+
+	*secret ^= modifier;
 	return;
 }

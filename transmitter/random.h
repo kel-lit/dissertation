@@ -4,7 +4,7 @@ and modified slightly.
 Originally created by bloc97 on GitHub: 
 */
 
-const int waitTime = 16;
+const int waitTime = 8;
 
 byte lastByte = 0;
 
